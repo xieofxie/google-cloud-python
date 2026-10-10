@@ -27,7 +27,7 @@ if not exist google_crc32c\CMakeLists.txt (
     git submodule update --init --recursive || goto :error
 )
 if "%CRC32C_ARCH%"=="arm64" (
-    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0build-arm64.ps1" || goto :error
+    py -3 "%~dp0build_wheel.py" --architecture arm64 --matrix || goto :error
     goto :validate
 )
 
@@ -64,6 +64,7 @@ FOR %%P IN (%SUPPORTED_PYTHON_VERSIONS%) DO (
     echo "Installing cmake for Python %%P"
     py -!python_version_trimmed!-64 -m pip install cmake || goto :error
 
+    py -!python_version_trimmed!-64 -m unittest discover -s "%~dp0." -p test_build_wheel.py || goto :error
     py -!python_version_trimmed!-64 "%~dp0build_wheel.py" --architecture x64 || goto :error
     echo "Finished with Python version %%P"
 )

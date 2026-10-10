@@ -41,73 +41,46 @@ python ./scripts/check_crc32c_extension.py
 
 On Windows:
 
-The shared Windows matrix entry point defaults to x64:
-
-```
-.\scripts\windows\build.bat
-```
-
-For one interpreter, use a native x64 or ARM64 CPython with pip, Visual Studio
-2022 C++ build tools for the target architecture, and CMake on `PATH` (or
-installed in that interpreter with `python -m pip install cmake`):
+Use CPython with pip and Visual Studio 2022 C++ build tools matching the target
+architecture. CMake must be on `PATH`, or installed in the interpreter with
+`python -m pip install cmake` for single-interpreter builds.
 
 ```powershell
-# Run from packages\google-crc32c on Windows ARM64 with ARM64 Python.
+# Run from packages\google-crc32c with ARM64 Python on Windows ARM64.
 python .\scripts\windows\build_wheel.py --architecture arm64
-# On x64, use --architecture x64 instead.
+# With x64 Python, use --architecture x64 instead.
 ```
 
-This builds in a temporary directory without resetting or cleaning the
-submodule. It verifies the wheel's CPython/platform tags and the PE machine
-types of both the extension and bundled DLL. It installs the wheel in a fresh
-environment, hides the build-time DLL, and runs the native import check and
-package tests before copying the wheel into `wheels`.
-Temporary-directory cleanup retries transient Windows file locks up to five
-times; persistent cleanup errors fail the command.
-Both matrices use this same builder and test implementation. The x64 entry
-point retains Chocolatey and the Python launcher for interpreter setup;
-`build-arm64.ps1` handles ARM64 interpreter setup and invokes the shared builder.
-
-To retest an existing wheel without rebuilding it:
+The command builds and tests the wheel, then writes it to `wheels`.
+To retest an existing wheel matching the interpreter and architecture:
 
 ```powershell
 python .\scripts\windows\build_wheel.py --architecture arm64 --test-only
-# Existing x64 callers can still use the launcher-based wrapper:
+# Existing x64 test wrapper:
 .\scripts\windows\test.bat 3.12
 ```
 
-`--test-only` requires exactly one wheel matching the interpreter's ABI and
-target architecture in `wheels` (or `--output-dir`). It uses a fresh environment,
-runs the same binary checks, import check, package tests, and `twine check`, and
-does not modify the calling interpreter's installed packages.
-
-To run the entire ARM64 matrix on native Windows ARM64 hardware:
+To build all versions in `scripts/python_versions.yaml`, use the matrix entry
+point (x64 by default):
 
 ```powershell
-$env:CRC32C_ARCH = "arm64"
 $env:PUBLISH_WHEELS = "false"
+$env:CRC32C_ARCH = "x64" # Use "arm64" on Windows ARM64.
 .\scripts\windows\build.bat
 ```
 
-The ARM64 matrix installs official CPython ARM64 distributions under
-`%LOCALAPPDATA%\crc32c-python`, using `scripts/python_versions.yaml`.
-Installer cleanup allows up to five attempts, waiting two seconds between
-file-access failures; persistent errors stop the matrix.
-Windows ARM64 wheels start at Python 3.11 because Python 3.10 has no official
-Windows ARM64 installer. The x64 matrix still includes Python 3.10.
-The matrix entry point also needs an existing Python launcher (`py -3`) for
-distribution validation and publishing, as the x64 release script does.
+Both matrices require the Python launcher (`py -3`) and run the builder's
+regression tests before each wheel build. The x64 matrix uses Chocolatey;
+the ARM64 matrix uses a bootstrap Python 3.10 or newer, requires CMake on `PATH`,
+and installs Python under
+`%LOCALAPPDATA%\crc32c-python`. ARM64 starts at Python 3.11; x64 includes 3.10.
+Keep `PUBLISH_WHEELS=false` for local builds; `true` enables publishing.
 
-ARM64 CI worker provisioning and release-job registration are deferred.
-The existing Windows release entry point remains unchanged;
-`PUBLISH_WHEELS=true` enables publishing, so leave it unset or `false` for local
-builds.
+To run only the ARM64 wheel matrix without the batch release steps:
 
-The native submodule is temporarily pinned to commit
-`000ba0ffe36995ae182ed8385b23fb29c26d6f04` from
-[google/crc32c#73](https://github.com/google/crc32c/pull/73).
-Before merging/releasing, replace that pin with the upstream merged commit
-containing Windows ARM64 support.
+```powershell
+python .\scripts\windows\build_wheel.py --architecture arm64 --matrix
+```
 
 ## Installing locally for testing
 
