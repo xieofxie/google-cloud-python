@@ -12,21 +12,16 @@
 @rem See the License for the specific language governing permissions and
 @rem limitations under the License.
 
-@rem This test file runs for one Python version at a time, and is intended to
-@rem be called from within the build loop.
+@rem Compatibility entry point for testing an existing x64 wheel.
+@rem For other interpreters use build_wheel.py --architecture ... --test-only.
 
-set PYTHON_VERSION=%1
+setlocal
+cd /d "%~dp0..\.." || exit /b 1
+set "PYTHON_VERSION=%~1"
 if "%PYTHON_VERSION%"=="" (
   echo "Python version was not provided, using Python 3.10"
   set PYTHON_VERSION=3.10
 )
 
-py -%PYTHON_VERSION%-64 -m pip install --no-index --find-links=wheels google-crc32c --force-reinstall
-
-py -%PYTHON_VERSION%-64 ./scripts/check_crc32c_extension.py
-
-@rem pyreadline is removed here because pytest will opportunistically use it if
-@rem available, but the installed version is too old to work.
-py -%PYTHON_VERSION%-64 -m pip uninstall -y pyreadline
-py -%PYTHON_VERSION%-64 -m pip install pytest
-py -%PYTHON_VERSION%-64 -m pytest tests --junitxml=%PYTHON_VERSION%_sponge_log.xml
+py -%PYTHON_VERSION%-64 "%~dp0build_wheel.py" --architecture x64 --test-only
+exit /b %ERRORLEVEL%
