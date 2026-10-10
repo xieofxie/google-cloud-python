@@ -18,14 +18,21 @@ setlocal ENABLEDELAYEDEXPANSION
 cd /d "%~dp0..\.." || goto :error
 
 set CRC32C_PURE_PYTHON=0
-set CMAKE_GENERATOR="Visual Studio 17 2022"
-set CONFIGURATION=RelWithDebInfo
-set CRC32C_INSTALL_PREFIX=%cd%\build\%CONFIGURATION%
+if "%CRC32C_ARCH%"=="" set CRC32C_ARCH=x64
+if not "%CRC32C_ARCH%"=="x64" if not "%CRC32C_ARCH%"=="arm64" (
+    echo "Unsupported CRC32C_ARCH: %CRC32C_ARCH%. Expected x64 or arm64."
+    goto :error
+)
+if not exist google_crc32c\CMakeLists.txt (
+    git submodule update --init --recursive || goto :error
+)
+if "%CRC32C_ARCH%"=="arm64" (
+    py -3 "%~dp0build_wheel.py" --architecture arm64 --matrix || goto :error
+    goto :validate
+)
 
 @rem Iterate through supported Python versions.
-@rem Unfortunately pyenv for Windows has an out-of-date versions list. Choco's
-@rem installer seems to have some problems with installing multiple versions at
-@rem once, so as a workaround, we will install and then uninstall every version.
+@rem Keep the existing Chocolatey/launcher setup for x64.
 for /f "tokens=2 delims=:" %%A in ('findstr /b "versions:" "%~dp0..\python_versions.yaml"') do set SUPPORTED_PYTHON_VERSIONS=%%A
 @rem Set PY_PYTHON3 to the first (lowest supported) version in python_versions.yaml so py -3 uses a stable version.
 for /f "tokens=1 delims= " %%V in ("%SUPPORTED_PYTHON_VERSIONS%") do for /f "tokens=1,2 delims=." %%I in ("%%V") do set PY_PYTHON3=%%I.%%J
@@ -57,43 +64,9 @@ FOR %%P IN (%SUPPORTED_PYTHON_VERSIONS%) DO (
     echo "Installing cmake for Python %%P"
     py -!python_version_trimmed!-64 -m pip install cmake || goto :error
 
-    @rem Add directory as safe to avoid "detected dubious ownership" fatal issue
-    git config --global --add safe.directory *
-    git submodule update --init --recursive || goto :error
-    pushd google_crc32c || goto :error
-    @rem reset hard to cleanup any changes done by a previous build.
-    git reset --hard
-    git clean -fxd
-
-    del /s /q CMakeFiles\
-    del CMakeCache.txt
-
-    mkdir build
-    cd build
-
-    echo "Running cmake with Generator:  %CMAKE_GENERATOR%, Platform: x64, Install Prefix: %CRC32C_INSTALL_PREFIX%"
-
-    py -!python_version_trimmed!-64 -m cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_POLICY_VERSION_MINIMUM=3.12 -DCRC32C_BUILD_BENCHMARKS=no -DCRC32C_BUILD_TESTS=no -DBUILD_SHARED_LIBS=yes -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=yes -DCRC32C_USE_GLOG=0 -DCMAKE_INSTALL_PREFIX:PATH="%CRC32C_INSTALL_PREFIX%" .. || goto :error
-
-    py -!python_version_trimmed!-64 -m cmake --build . --config "%CONFIGURATION%" --target install || goto :error
-
-    dir %CRC32C_INSTALL_PREFIX% /b /s
-    popd
-
-    dir  %CRC32C_INSTALL_PREFIX%\bin
-    echo "Copying Binary to root: %CRC32C_INSTALL_PREFIX%\bin\crc32c.dll"
-    copy %CRC32C_INSTALL_PREFIX%\bin\crc32c.dll . || goto :error
-
-    py -!python_version_trimmed!-64 -m pip install --upgrade pip setuptools wheel || goto :error
-    echo "Building C extension"
-    py -!python_version_trimmed!-64 setup.py build_ext -v --include-dirs=%CRC32C_INSTALL_PREFIX%\include --library-dirs=%CRC32C_INSTALL_PREFIX%\lib || goto :error
-    echo "Building Wheel"
-    py -!python_version_trimmed!-64 -m pip wheel . --wheel-dir wheels/ || goto :error
-
-    echo "Built wheel, now running tests."
-    call %~dp0/test.bat !python_version_trimmed! || goto :error
-
-    echo "Finished with Python version %P"
+    py -!python_version_trimmed!-64 -m unittest discover -s "%~dp0." -p test_build_wheel.py || goto :error
+    py -!python_version_trimmed!-64 "%~dp0build_wheel.py" --architecture x64 || goto :error
+    echo "Finished with Python version %%P"
 )
 
 echo "Built wheels in wheels/ directory:"
@@ -101,12 +74,13 @@ dir wheels\*.whl || goto :error
 
 for %%P in (%SUPPORTED_PYTHON_VERSIONS%) do (
     for /f "tokens=1,2 delims=." %%I in ("%%P") do set py_tag=cp%%I%%J
-    dir wheels\*!py_tag!*.whl >nul || (
+    dir wheels\google_crc32c-*-!py_tag!-!py_tag!-win_amd64.whl >nul || (
         echo "ERROR: Missing Windows wheel for !py_tag!!"
         goto :error
     )
 )
 
+:validate
 echo "Validating built wheels with twine check"
 py -3 -m pip install --upgrade twine wheel setuptools pkginfo || goto :error
 

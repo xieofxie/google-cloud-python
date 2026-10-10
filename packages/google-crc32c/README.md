@@ -34,4 +34,6 @@ Wheels are published for `x86_64` and `arm64` architectures.
 
 ## Windows
 
-Wheels are published for the `win_amd64` architecture.
+Wheels are published for the `win_amd64` architecture. The build scripts also
+support `win_arm64` wheels for CPython 3.11 and newer on native Windows ARM64
+workers; see [BUILDING.md](BUILDING.md) for prerequisites and build instructions.

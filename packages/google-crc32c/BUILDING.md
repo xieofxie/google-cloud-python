@@ -4,7 +4,8 @@
 ## Be sure to check out all submodules:
 
 ```
-$ git clone --recursive https://github.com/googleapis/python-crc32c
+$ git clone --recursive https://github.com/googleapis/google-cloud-python
+$ cd google-cloud-python/packages/google-crc32c
 ```
 
 ## Building and Testing Wheels
@@ -40,11 +41,46 @@ python ./scripts/check_crc32c_extension.py
 
 On Windows:
 
-```
-.\scripts\windows\build.bat
-.\scripts\windows\test.bat
+Use CPython with pip and Visual Studio 2022 C++ build tools matching the target
+architecture. CMake must be on `PATH`, or installed in the interpreter with
+`python -m pip install cmake` for single-interpreter builds.
+
+```powershell
+# Run from packages\google-crc32c with ARM64 Python on Windows ARM64.
+python .\scripts\windows\build_wheel.py --architecture arm64
+# With x64 Python, use --architecture x64 instead.
 ```
 
+The command builds and tests the wheel, then writes it to `wheels`.
+To retest an existing wheel matching the interpreter and architecture:
+
+```powershell
+python .\scripts\windows\build_wheel.py --architecture arm64 --test-only
+# Existing x64 test wrapper:
+.\scripts\windows\test.bat 3.12
+```
+
+To build all versions in `scripts/python_versions.yaml`, use the matrix entry
+point (x64 by default):
+
+```powershell
+$env:PUBLISH_WHEELS = "false"
+$env:CRC32C_ARCH = "x64" # Use "arm64" on Windows ARM64.
+.\scripts\windows\build.bat
+```
+
+Both matrices require the Python launcher (`py -3`) and run the builder's
+regression tests before each wheel build. The x64 matrix uses Chocolatey;
+the ARM64 matrix uses a bootstrap Python 3.10 or newer, requires CMake on `PATH`,
+and installs Python under
+`%LOCALAPPDATA%\crc32c-python`. ARM64 starts at Python 3.11; x64 includes 3.10.
+Keep `PUBLISH_WHEELS=false` for local builds; `true` enables publishing.
+
+To run only the ARM64 wheel matrix without the batch release steps:
+
+```powershell
+python .\scripts\windows\build_wheel.py --architecture arm64 --matrix
+```
 
 ## Installing locally for testing
 
@@ -52,7 +88,7 @@ Initialize the submodules and build the main `libcrc32c.so` shared
 library using `cmake` / `make`:
 
 ```bash
-$ cd python-crc32c
+$ cd google-cloud-python/packages/google-crc32c
 $ git submodule update --init --recursive
 $ python -m venv venv
 $ venv/bin/pip install --upgrade setuptools pip wheel
